@@ -17,10 +17,44 @@ func (entity *SuccessResponse) UserRegistrationResp(id *string) {
 	data["id"] = *id
 	responseData = append(responseData, data)
 	entity.Data = responseData
+	entity.Success = true
 	metaData := make(map[string]interface{})
 	metaData["message"] = "User registered"
 }
 
+func (entity *SuccessResponse) CreatePermissionResp(id *string){
+	responseData := make([]map[string]interface{}, 0)
+	data := make(map[string]interface{})
+	data["id"] = *id
+	responseData = append(responseData, data)
+	entity.Data = responseData
+	entity.Success = true
+	metaData := make(map[string]interface{})
+	metaData["message"] = "Permission Created"
+}
+
+func (entity *SuccessResponse) CreateRolesResp(id *string){
+	responseData := make([]map[string]interface{}, 0)
+	data := make(map[string]interface{})
+	data["id"] = *id
+	responseData = append(responseData, data)
+	entity.Data = responseData
+	entity.Success = true
+	metaData := make(map[string]interface{})
+	metaData["message"] = "Roles Created"
+}
+
+func (resp *SuccessResponse) CreateClusterResponse(id string, boo bool){
+	responseData := make([]map[string]interface{}, 0)
+	data := make(map[string]interface{})
+	data["id"] = id
+	data["Accepted"] = boo
+	responseData = append(responseData, data)
+	resp.Data = responseData
+	resp.Success = true
+	metaData := make(map[string]interface{})
+	metaData["message"] = "Cluster queued to create in background, Please wait for 20+ min..."
+}
 
 
 func (resp *SuccessResponse) SuccessResponse(rw http.ResponseWriter, statusCode int){
@@ -44,5 +78,7 @@ func (resp *SuccessResponse) SuccessResponse(rw http.ResponseWriter, statusCode 
 	_ = json.NewEncoder(rw).Encode(resp)
 	return
 }
+
+
 
 

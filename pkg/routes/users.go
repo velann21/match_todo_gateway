@@ -11,10 +11,11 @@ type UsersRoutes struct {
 	UsersServiceGrpcClient pf.UserManagementServiceClient
 }
 
-func (i *UsersRoutes) ApiRoutes(route *mux.Router){
+func (i *UsersRoutes) UsersRoutes(route *mux.Router){
 	gwc := controller.UserServiceController{
 		Service:service.New(i.UsersServiceGrpcClient),
 	}
+	route.PathPrefix("/users/test").HandlerFunc(gwc.TestController).Methods("GET")
 	route.PathPrefix("/users/registration").HandlerFunc(gwc.UsersRegistrationController).Methods("POST")
 	route.PathPrefix("/users/permission").HandlerFunc(gwc.CreatePermissionsController).Methods("POST")
 	route.PathPrefix("/users/roles").HandlerFunc(gwc.CreateRolesController).Methods("POST")

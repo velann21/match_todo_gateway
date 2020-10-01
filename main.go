@@ -1,146 +1,277 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"github.com/velann21/match_todo_gateway_srv/pkg/middleware"
+	"github.com/velann21/match_todo_gateway_srv/pkg/routes"
+	rmPf "github.com/velann21/todo-commonlib/proto_files/resource_manager"
+	userPf "github.com/velann21/todo-commonlib/proto_files/users_srv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
-	"strings"
+	"time"
 )
-
-// Get env var or default
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
-}
-
-// Get the port to listen on
-func getListenAddress() string {
-	port := getEnv("PORT", "1338")
-	return ":" + port
-}
-
-
-// Serve a reverse proxy for a given url
-func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request) {
-	// parse the url
-	url, _ := url.Parse(target)
-
-	// create the reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(url)
-
-	// Update the headers to allow for SSL redirection
-	req.URL.Host = url.Host
-	req.URL.Scheme = url.Scheme
-	req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-	req.Host = url.Host
-
-	// Note that ServeHttp is non blocking and uses a go routine under the hood
-	proxy.ServeHTTP(res, req)
-}
-
-
-// Given a request send it to the appropriate url
-func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
-	requestPayload := parseRequestBody(req)
-	url := getProxyUrl(requestPayload.ProxyCondition)
-	logRequestPayload(requestPayload, url)
-	serveReverseProxy(url, res, req)
-}
-
-// Log the typeform payload and redirect url
-func logRequestPayload(requestionPayload requestPayloadStruct, proxyUrl string) {
-	log.Printf("proxy_condition: %s, proxy_url: %s\n", requestionPayload.ProxyCondition, proxyUrl)
-}
-
-// Get the url for a given proxy condition
-func getProxyUrl(proxyConditionRaw string) string {
-	proxyCondition := strings.ToUpper(proxyConditionRaw)
-
-	a_condtion_url := os.Getenv("A_CONDITION_URL")
-	b_condtion_url := os.Getenv("B_CONDITION_URL")
-	default_condtion_url := os.Getenv("DEFAULT_CONDITION_URL")
-
-	if proxyCondition == "A" {
-		return a_condtion_url
-	}
-
-	if proxyCondition == "B" {
-		return b_condtion_url
-	}
-
-	return default_condtion_url
-}
-
 
 
 func main() {
+
+	var log = logrus.New()
+	log.Formatter = new(logrus.TextFormatter)
+	log.Formatter.(*logrus.TextFormatter).DisableColors = true
+	log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true
+	if rcl, err := NewRcLogHook("localhost:50052"); err == nil {
+		log.Hooks.Add(rcl)
+	}
+	log.Out = os.Stdout
+
 	r := mux.NewRouter().StrictSlash(false)
 	r.Use(middleware.TraceLogger())
 	r.Use(middleware.Authentication())
+	r.Use(middleware.Metrics())
+
+	r.Use()
+
 	resolver.SetDefaultScheme("dns")
-	amConn, err := grpc.Dial(
-		"todolistsrv1:50051",
+
+	mainRoutes := r.PathPrefix("/api/v1").Subrouter()
+	usersConn , err := DialUsersSrv()
+	if err != nil{
+		logrus.Error("Something went wrong while calling USER grpc server")
+		os.Exit(1)
+	}
+	userClient := userPf.NewUserManagementServiceClient(usersConn)
+	users := routes.UsersRoutes{UsersServiceGrpcClient: userClient,}
+	users.UsersRoutes(mainRoutes)
+	go RegisterUsersGrpcConnectionState(usersConn)
+
+	rmConn, err := DialResourceManager()
+	if err != nil{
+		logrus.Error("Something went wrong while calling RM grpc server")
+		os.Exit(1)
+	}
+	rmClient := rmPf.NewResourceManagerServiceClient(rmConn)
+	rmRoutes := routes.ResourceManagerRoutes{ResourceManagerGrpcClient:rmClient, Log: log}
+	rmRoutes.ResourceManagerRoutes(mainRoutes)
+	go RegisterRmGrpcConnectionState(rmConn)
+
+
+	logrus.WithField("EventType", "Bootup").Info("Booting up server at port : " + "8081")
+	if err := http.ListenAndServe(":8081", r); err != nil {
+		logrus.WithField("EventType", "Server Bootup").WithError(err).Error("Server Bootup Error")
+		log.Fatal(err)
+		return
+	}
+}
+
+func DialResourceManager()(*grpc.ClientConn, error){
+	rmConn , err := grpc.Dial(
+		"localhost:50052",
 		grpc.WithInsecure(),
 		grpc.WithBalancerName(roundrobin.Name),
 	)
 	if err != nil{
 		logrus.Error("Something went wrong while calling AM grpc server")
-		os.Exit(1)
+		return nil, err
 	}
-	logrus.Info("Connection made grpc ", amConn)
-
-
-	// start server
-	http.HandleFunc("/", handleRequestAndRedirect)
-	if err := http.ListenAndServe(getListenAddress(), nil); err != nil {
-		panic(err)
-	}
+	return rmConn, nil
 }
 
-type requestPayloadStruct struct {
-	ProxyCondition string `json:"proxy_condition"`
+func DialUsersSrv()(*grpc.ClientConn, error){
+	rmConn , err := grpc.Dial(
+		"localhost:50051",
+		grpc.WithInsecure(),
+		grpc.WithBalancerName(roundrobin.Name),
+	)
+	if err != nil{
+		logrus.Error("Something went wrong while calling AM grpc server")
+		return nil, err
+	}
+	return rmConn, nil
 }
 
-// Get a json decoder for a given requests body
-func requestBodyDecoder(request *http.Request) *json.Decoder {
-	// Read body to buffer
-	body, err := ioutil.ReadAll(request.Body)
+func RegisterRmGrpcConnectionState(conn *grpc.ClientConn) {
+	go func() {
+		for  {
+			state := conn.GetState()
+			if (state == connectivity.TransientFailure) || (state == connectivity.Shutdown) {
+				//fmt.Println("RegisterRmGrpcConnectionState is down")
+				time.Sleep(time.Second * 10)
+			}
+			//fmt.Println("State ", state)
+			time.Sleep(time.Second * 2)
+		}
+	}()
+}
+
+func RegisterUsersGrpcConnectionState(conn *grpc.ClientConn) {
+	go func() {
+		for  {
+			state := conn.GetState()
+			if (state == connectivity.TransientFailure) || (state == connectivity.Shutdown) {
+				//fmt.Println("RegisterRmGrpcConnectionState is down")
+				time.Sleep(time.Second * 10)
+			}
+			//fmt.Println("State ", state)
+			time.Sleep(time.Second * 2)
+		}
+	}()
+}
+
+
+
+
+
+type RclogHook struct {
+	clientConn *grpc.ClientConn
+}
+
+func NewRcLogHook(address string)(*RclogHook, error){
+	rmConn , err := grpc.Dial(
+		address,
+		grpc.WithInsecure(),
+		grpc.WithBalancerName(roundrobin.Name),
+	)
+	if err != nil{
+		logrus.Error("Something went wrong while calling AM grpc server")
+		return nil, err
+	}
+	fmt.Println("Connection made")
+	return &RclogHook{clientConn:rmConn}, nil
+}
+
+type Mystruct struct {
+	Level logrus.Level `json:"level"`
+	Message string `json:"msg"`
+	Number int `json:"number"`
+	Omg bool `json:"omg"`
+}
+
+func (hook *RclogHook) Fire(entry *logrus.Entry) error {
+	data := entry.Data
+	myst := &Mystruct{}
+	byData, err := json.Marshal(data)
+	err = json.Unmarshal(byData, &myst)
+	if err != nil{
+		fmt.Println("error occured Unmarshal",err)
+	}
+	fmt.Println("Data: ", myst.Number)
+
+
+	_, err = entry.String()
 	if err != nil {
-		log.Printf("Error reading body: %v", err)
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Unable to read entry, %v", err)
+		return err
 	}
 
-	// Because go lang is a pain in the ass if you read the body then any susequent calls
-	// are unable to read the body again....
-	request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-	return json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(body)))
+	switch entry.Level {
+	case logrus.PanicLevel:
+		fmt.Println("Sending the data to panic")
+
+	case logrus.FatalLevel:
+		fmt.Println("Sending the data to FatalLevel")
+		trans := http.Transport{}
+		client := http.Client{
+			Transport:&trans,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8081/api/v1/users/test", nil)
+		if err != nil{
+
+		}
+		resp, err := client.Do(req)
+		if err != nil{
+			log.Fatal("failed")
+		}
+		fmt.Println(resp.Body)
+		fmt.Println(resp.Status)
+	case logrus.ErrorLevel:
+		fmt.Println("Sending the data to ErrorLevel")
+		trans := http.Transport{}
+		client := http.Client{
+			Transport:&trans,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8081/api/v1/users/test", nil)
+		if err != nil{
+
+		}
+		resp, err := client.Do(req)
+		if err != nil{
+			log.Fatal("failed")
+		}
+		fmt.Println(resp.Body)
+		fmt.Println(resp.Status)
+	case logrus.WarnLevel:
+		fmt.Println("Sending the data to WarnLevel")
+		trans := http.Transport{}
+		client := http.Client{
+			Transport:&trans,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8081/api/v1/users/test", nil)
+		if err != nil{
+
+		}
+		resp, err := client.Do(req)
+		if err != nil{
+			log.Fatal("failed")
+		}
+		fmt.Println(resp.Body)
+		fmt.Println(resp.Status)
+	case logrus.InfoLevel:
+		fmt.Println("Inside InfoLevel")
+		rmClient := rmPf.NewResourceManagerServiceClient(hook.clientConn)
+		er := rmPf.EventsRequests{
+			EventType:"DeployApp",
+			ServiceName:"GatewaySrv",
+			Time: time.Now().UTC().String(),
+			ActionType:"Request",
+			TraceID: "skdjksjd8",
+			Transaction:&rmPf.EventsTransaction{
+				EventType:"DeployApp",
+			},
+		}
+		eventResponse, err := rmClient.CollectEvent(context.Background(), &er)
+		if err != nil{
+			fmt.Println(err)
+		}
+		fmt.Println("Final Resp", eventResponse)
+	case logrus.DebugLevel, logrus.TraceLevel:
+		fmt.Println("Sending the data to DebugLevel, TraceLevel")
+		trans := http.Transport{}
+		client := http.Client{
+			Transport:&trans,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:8081/api/v1/users/test", nil)
+		if err != nil{
+
+		}
+		resp, err := client.Do(req)
+		if err != nil{
+			log.Fatal("failed")
+		}
+		fmt.Println(resp.Body)
+		fmt.Println(resp.Status)
+	default:
+		return nil
+	}
+	return nil
 }
 
-
-// Parse the requests body
-func parseRequestBody(request *http.Request) requestPayloadStruct {
-	decoder := requestBodyDecoder(request)
-
-	var requestPayload requestPayloadStruct
-	err := decoder.Decode(&requestPayload)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return requestPayload
+func (hook *RclogHook) Levels() []logrus.Level {
+	return logrus.AllLevels
 }
