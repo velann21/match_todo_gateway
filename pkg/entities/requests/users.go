@@ -3,8 +3,8 @@ package requests
 import (
 	"encoding/json"
 	"errors"
+	pf "github.com/velann21/todo-commonlib/proto_files/users_srv"
 	"io"
-	pf "github.com/velann21/todo-commonlib/proto_files"
 )
 
 var (

@@ -6,6 +6,6 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
 	github.com/sirupsen/logrus v1.6.0
-	github.com/velann21/todo-commonlib v0.0.25
+	github.com/velann21/todo-commonlib v1.31.12
 	google.golang.org/grpc v1.30.0
 )
