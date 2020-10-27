@@ -1,0 +1,12 @@
+imagebase: singaravelan21/match_todo_list_user_srv
+imageversion: v2.17.0
+replicas: 3
+namespace: users
+containers:
+  - name: users-srv
+    image: singaravelan21/match_todo_list_user_srv:v2.17.0
+
+serviceports:
+  - protocol: TCP
+    port: 80
+    targetPort: 50051

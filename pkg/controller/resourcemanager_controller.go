@@ -37,5 +37,5 @@ func (rmc *ResourceManagerController) CreateCluster(res http.ResponseWriter, req
 }
 
 func (rmc *ResourceManagerController) GenerateEvent(res http.ResponseWriter, req *http.Request) {
-	rmc.Log.Info("Inside GenerateEvent")
+	//rmc.Log.Info("Inside GenerateEvent")
 }
