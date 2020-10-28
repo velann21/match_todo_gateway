@@ -1,16 +1,16 @@
-{{- define "gateway.labels" }}
-         labels:
+{{- define "gatewaypods.labels" }}
+      labels:
            app: "{{ $.Release.Name }}"
            k8s-app-name: famk8s
            owned_by: platform
 {{- end }}
 
 
-{{- define "gateway.labels" }}
-   labels:
-        app: "{{ $.Release.Name }}"
-        k8s-app-name: famk8s
-        owned_by: platform
+{{- define "gatewaydeps.labels" }}
+  labels:
+       app: "{{ $.Release.Name }}"
+       k8s-app-name: famk8s
+       owned_by: platform
 {{- end }}
 
 {{- define "deployment.apiVersion" }}apps/v1{{- end }}

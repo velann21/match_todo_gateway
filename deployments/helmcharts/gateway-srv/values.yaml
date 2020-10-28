@@ -1,12 +1,12 @@
-imagebase: singaravelan21/match_todo_list_user_srv
-imageversion: v2.17.0
+imagebase: singaravelan21/match_todo_list_gatewaysrv:v1.1.0
+imageversion: v1.1.0
 replicas: 3
-namespace: users
+namespace: gateway
 containers:
-  - name: users-srv
-    image: singaravelan21/match_todo_list_user_srv:v2.17.0
+  - name: gateway-srv
+    image: singaravelan21/match_todo_list_gatewaysrv:v1.1.0
 
 serviceports:
-  - protocol: TCP
+  - NodePort: 30163
     port: 80
-    targetPort: 50051
+    targetPort: 80

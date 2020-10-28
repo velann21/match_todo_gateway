@@ -3,12 +3,12 @@ kind: Deployment
 metadata:
   name: {{ .Release.Name}}
   namespace: {{ .Values.namespace }}
-  {{- template "usersdeps.labels" . }}
+  {{- template "gatewaydeps.labels" . }}
 spec:
   template:
     metadata:
       name: {{ .Release.Name}}
-      {{- template "userspods.labels" . }}
+      {{- template "gatewaypods.labels" . }}
     spec:
       containers:
         {{- range $key, $value := .Values.containers }}
