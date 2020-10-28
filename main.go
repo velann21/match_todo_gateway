@@ -23,14 +23,14 @@ import (
 
 func main() {
 
-	var log = logrus.New()
-	log.Formatter = new(logrus.TextFormatter)
-	log.Formatter.(*logrus.TextFormatter).DisableColors = true
-	log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true
-	if rcl, err := NewRcLogHook("localhost:50052"); err == nil {
-		log.Hooks.Add(rcl)
-	}
-	log.Out = os.Stdout
+	//var log = logrus.New()
+	//log.Formatter = new(logrus.TextFormatter)
+	//log.Formatter.(*logrus.TextFormatter).DisableColors = true
+	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true
+	//if rcl, err := NewRcLogHook("localhost:50052"); err == nil {
+	//	log.Hooks.Add(rcl)
+	//}
+	//log.Out = os.Stdout
 
 	r := mux.NewRouter().StrictSlash(false)
 	r.Use(middleware.TraceLogger())
@@ -42,6 +42,7 @@ func main() {
 	resolver.SetDefaultScheme("dns")
 
 	mainRoutes := r.PathPrefix("/api/v1").Subrouter()
+
 	usersConn , err := DialUsersSrv()
 	if err != nil{
 		logrus.Error("Something went wrong while calling USER grpc server")
@@ -58,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 	rmClient := rmPf.NewResourceManagerServiceClient(rmConn)
-	rmRoutes := routes.ResourceManagerRoutes{ResourceManagerGrpcClient:rmClient, Log: log}
+	rmRoutes := routes.ResourceManagerRoutes{ResourceManagerGrpcClient:rmClient, Log: nil}
 	rmRoutes.ResourceManagerRoutes(mainRoutes)
 	go RegisterRmGrpcConnectionState(rmConn)
 
@@ -102,10 +103,10 @@ func RegisterRmGrpcConnectionState(conn *grpc.ClientConn) {
 		for  {
 			state := conn.GetState()
 			if (state == connectivity.TransientFailure) || (state == connectivity.Shutdown) {
-				//fmt.Println("RegisterRmGrpcConnectionState is down")
+				fmt.Println("RegisterRmGrpcConnectionState is down")
 				time.Sleep(time.Second * 10)
 			}
-			//fmt.Println("State ", state)
+			fmt.Println("State ", state)
 			time.Sleep(time.Second * 2)
 		}
 	}()
@@ -116,10 +117,10 @@ func RegisterUsersGrpcConnectionState(conn *grpc.ClientConn) {
 		for  {
 			state := conn.GetState()
 			if (state == connectivity.TransientFailure) || (state == connectivity.Shutdown) {
-				//fmt.Println("RegisterRmGrpcConnectionState is down")
+				fmt.Println("RegisterRmGrpcConnectionState is down")
 				time.Sleep(time.Second * 10)
 			}
-			//fmt.Println("State ", state)
+			fmt.Println("State ", state)
 			time.Sleep(time.Second * 2)
 		}
 	}()

@@ -1,0 +1,16 @@
+apiVersion: {{ template "service.apiVersion" .}}
+kind: Service
+metadata:
+  name: {{ .Release.Name}}
+  namespace: {{ .Values.namespace }}
+  {{- template "gatewaydeps.labels" . }}
+spec:
+  type: NodePort
+  selector:
+    app: {{ .Release.Name}}
+  ports:
+    {{- range $key, $value := .Values.serviceports }}
+    - nodePort: {{ $value.NodePort }}
+      port: {{ $value.port }}
+      targetPort: {{ $value.targetPort }}
+    {{- end }}

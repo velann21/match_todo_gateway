@@ -1,0 +1,12 @@
+imagebase: singaravelan21/match_todo_list_gatewaysrv:v1.1.0
+imageversion: v1.1.0
+replicas: 3
+namespace: gateway
+containers:
+  - name: gateway-srv
+    image: singaravelan21/match_todo_list_gatewaysrv:v1.1.0
+
+serviceports:
+  - NodePort: 30163
+    port: 80
+    targetPort: 80
