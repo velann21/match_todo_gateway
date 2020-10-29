@@ -2,7 +2,6 @@ apiVersion: {{ template "deployment.apiVersion" .}}
 kind: Deployment
 metadata:
   name: {{ .Release.Name}}
-  namespace: {{ .Values.namespace }}
   {{- template "gatewaydeps.labels" . }}
 spec:
   template:

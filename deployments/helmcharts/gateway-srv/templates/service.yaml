@@ -2,7 +2,6 @@ apiVersion: {{ template "service.apiVersion" .}}
 kind: Service
 metadata:
   name: {{ .Release.Name}}
-  namespace: {{ .Values.namespace }}
   {{- template "gatewaydeps.labels" . }}
 spec:
   type: NodePort
