@@ -168,7 +168,7 @@ func (hook *RclogHook) Fire(entry *logrus.Entry) error {
 
 	_, err = entry.String()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to read entry, %v", err)
+		//fmt.Fprintf(os.Stderr, "Unable to read entry, %v", err)
 		return err
 	}
 
